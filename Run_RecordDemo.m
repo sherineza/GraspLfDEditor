@@ -29,7 +29,7 @@ end
 %% Initialise Data Structs
 switch simulationNb
     case 19991
-        frame_names = {'Marker_Blue', 'Marker_Green', 'Frame0'};
+        frame_names = {'Marker_Blue', 'Frame0'};
         point_names = {'Tip'};
     otherwise
         frame_names = {};
@@ -50,12 +50,13 @@ end
 
 %% Initialise Demo info
 % Paths
-file_demoLog= sprintf('demo_grasp_%s.mat', datestr(now,'yyyymmddTHHMM'));
+name = sprintf('demo_graspfix_fast_%s',datestr(now,'yyyymmddTHHMMSS'));
+file_demoLog= strcat(name,'.mat')
 path_demoLog = ('C:/Users/elzaatas/Documents/Matlab-Vrep/GraspLfD/Demonstrations/');
-file_demoVideo = sprintf('demo_grasp_%s.avi', datestr(now,'yyyymmddTHHMM'));
+file_demoVideo = strcat(name,'.avi');
 
 %Parameters
-samplingRate=10; %per second
+samplingRate=100; %per second
 
 %Video
 [returnCode, camera]=vrep.simxGetObjectHandle(id,'Vision_sensor',vrep.simx_opmode_blocking);
@@ -72,19 +73,20 @@ while demoInProgress ~=2
     t=t+1
     for i = 1:length(frames)
         [returnCode, frames(i).pos(t,:)]=vrep.simxGetObjectPosition(id,frames(i).handle,-1,vrep.simx_opmode_streaming);
-        [returnCode, frames(i).orient(t,:)]=vrep.simxGetObjectOrientation(id,frames(i).handle,-1,vrep.simx_opmode_buffer);
+        [returnCode, frames(i).orient(t,:)]=vrep.simxGetObjectOrientation(id,frames(i).handle,-1,vrep.simx_opmode_streaming);
     end
     for i=1:length(points)
-        [returnCode, points(i).pos(t,:)]=vrep.simxGetObjectPosition(id,points(i).handle,-1,vrep.simx_opmode_buffer);
-        [returnCode, points(i).orient(t,:)]=vrep.simxGetObjectOrientation(id,points(i).handle,-1,vrep.simx_opmode_buffer);
+        [returnCode, points(i).pos(t,:)]=vrep.simxGetObjectPosition(id,points(i).handle,-1,vrep.simx_opmode_streaming);
+        [returnCode, points(i).orient(t,:)]=vrep.simxGetObjectOrientation(id,points(i).handle,-1,vrep.simx_opmode_streaming);
     end
     [returnCode, resolution, image]=vrep.simxGetVisionSensorImage2(id, camera, 0, vrep.simx_opmode_oneshot_wait);
     writeVideo(outputVideo,image);
     [returnCode, demoInProgress]= vrep.simxGetIntegerSignal(id, 'demoInProgress', vrep.simx_opmode_oneshot);
-    pause(1/samplingRate);
+    %pause(1/samplingRate);
 end
 vrep.simxStopSimulation(id,vrep.simx_opmode_oneshot);
 %% Save Log
+
 save(strcat(path_demoLog,file_demoLog),'frames','points','t');
 close(outputVideo);
 end
