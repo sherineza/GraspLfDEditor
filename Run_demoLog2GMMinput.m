@@ -3,8 +3,8 @@ function Run_demoLog2GMMinput
 % data for the GMM learning function.
 %% Get demo Log file names
 path_demoLog=('C:/Users/elzaatas/Documents/Matlab-Vrep/GraspLfD/Demonstrations/');
-filenames = dir(strcat(path_demoLog,'demo_grasp_201808*.mat'));
-filenames={filenames.name};
+filenames = dir(strcat(path_demoLog,'demo_graspfix_fast_201808*.mat'));
+filenames={filenames(1:7).name};
 
 %% Load data + manipulate
 orientfeaturesin =true;
@@ -28,30 +28,34 @@ for i=1:length(filenames)
             
             orient=frames(nbframe).orient(j,:);
             Rotf_g=[eul2rotm([0,0,orient(1)])*eul2rotm([0,orient(2),0])*eul2rotm([orient(3),0,0])];
-            Homf_g=[[Rotf_g,[frames(nbframe).pos(j,:)]'];[0,0,0,1]];
+            Rotf_g1=[eul2rotm([orient(3),0,0])*eul2rotm([0,orient(2),0])*eul2rotm([0,0,orient(1)])];
+            Rotf_g1=SpinCalc('EA123toDCM',orient.*180/3.1415,0.1,0);
+            %Homf_g=[[Rotf_g,[frames(nbframe).pos(j,:)]'];[0,0,0,1]];
             
             orientp=points.orient(j,:);
             Rotp_g=[eul2rotm([0,0,orientp(1)])*eul2rotm([0,orientp(2),0])*eul2rotm([orientp(3),0,0])];
-            Homp_g=[[Rotp_g,[points.pos(j,:)]'];[0,0,0,1]];
+            %Rotp_g=[eul2rotm([orientp(3),0,0])*eul2rotm([0,orientp(2),0])*eul2rotm([0,0,orientp(1)])];
             
-            relative_pos=Rotf_g*(points.pos(j,:)-frames(nbframe).pos(j,:))';
-            
-            
+            %Homp_g=[[Rotp_g,[points.pos(j,:)]'];[0,0,0,1]];
+   
             % [time, posx,posy,posz,orientalpha, orientbeta, orientgamma]
-            relative_orient=Rotp_g*inv(Rotf_g);
-            relative_orient=rotm2eul(relative_orient);
-            relative_orient=SpinCalc('EA321toEA123',relative_orient./3.14*180,1,0);
+            relative_orient=inv(Rotf_g)*Rotp_g;
+            relative_orient=rotm2eul(relative_orient,'XYZ');           
+            relative_orient=[inv(Rotf_g1)*Rotp_g*[1,0,0]';inv(Rotf_g1)*Rotp_g*[0,1,0]';inv(Rotf_g1)*Rotp_g*[0,0,1]'];
             if orientfeaturesin ==true
-                data_temp(:,nbframe) = [j;relative_pos(1:3);relative_orient(1:3)'./180*3.1415];
+                relative_pos=Rotf_g1*(+points.pos(j,:)-frames(nbframe).pos(j,:))';
+                data_temp(:,nbframe) = [j;relative_pos(1:3);relative_orient(1:9)];
             else
-                
+                relative_pos=Rotf_g*(points.pos(j,:)-frames(nbframe).pos(j,:))';
                 data_temp(:,nbframe) = [j;relative_pos(1:3)];
             end
             
         end
         Data(:,:,j,i)=data_temp;
     end
-    
+% Saving a sample demo
+testdemodata.Data=Data(2:end,1,2:end,i)
+
     %For data of frames:
     %Struct s contains n rows (n is number of demonstrations). Each row
     %contains struct p with m rows (m being number of frames). Each row
@@ -59,12 +63,15 @@ for i=1:length(filenames)
     for nbframe=1:length(frames)
         s(i).p(nbframe).A=eye(length(Data(:,1,1)));
         orient=frames(nbframe).orient(10,:);
-        Rotf_g=[eul2rotm([0,0,orient(1)])*eul2rotm([0,orient(2),0])*eul2rotm([orient(3),0,0])];
-        
+        Rotf_g1=[eul2rotm([0,0,orient(1)])*eul2rotm([0,orient(2),0])*eul2rotm([orient(3),0,0])];
+        Rotf_g=[eul2rotm([orient(3),0,0])*eul2rotm([0,orient(2),0])*eul2rotm([0,0,orient(1)])];
+       
         if orientfeaturesin ==true
-            s(i).p(nbframe).b=[0,frames(nbframe).pos(10,:),orient]';
-            s(i).p(nbframe).A(2:4,2:4)=Rotf_g;
-            %              s(i).p(nbframe).A(5:end,5:end)=Rotf_g;
+            s(i).p(nbframe).b=[0,frames(nbframe).pos(10,:),[0 0 0 0 0 0 0 0 0]];
+            s(i).p(nbframe).A(2:4,2:4)= Rotf_g1;
+            s(i).p(nbframe).A(5:7,5:7)=Rotf_g1;
+            s(i).p(nbframe).A(8:10,8:10)=Rotf_g1;
+            s(i).p(nbframe).A(11:13,11:13)=Rotf_g1;
         else
             s(i).p(nbframe).b=[0,frames(nbframe).pos(10,:)]';
             s(i).p(nbframe).A(end-2:end,end-2:end)=Rotf_g;
@@ -94,7 +101,7 @@ else
             Data(:,:,indx+1:end,i)=Data(:,:,indx:end-1,i);
             Data(:,:,indx,i)=(Data(:,:,indx-1,i)+Data(:,:,indx+1,i))/2;%Interpolating step
         end
-        Data(1,1,:,i)=1:nbperDemo;Data(1,2,:,i)=1:nbperDemo;Data(1,3,:,i)=1:nbperDemo;
+        Data(1,1,:,i)=1:nbperDemo;Data(1,2,:,i)=1:nbperDemo;%Data(1,3,:,i)=1:nbperDemo;
         DataGMM01=cat(3,DataGMM01,Data(:,:,2:nbperDemo,i));
     end
     
@@ -111,7 +118,8 @@ model.nbperDemo=nbperDemo;
 model.nbSamples=length(filenames);
 model.orientfeatin=orientfeaturesin;
 
+
 %% Save GMM input
-save(strcat(path_demoLog,'DataGMM01'),'Data','model','s');
+save(strcat(path_demoLog,'DataGMM01'),'Data','model','s', 'testdemodata');
 
 end

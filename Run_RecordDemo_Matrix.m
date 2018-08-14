@@ -50,7 +50,7 @@ end
 
 %% Initialise Demo info
 % Paths
-name = sprintf('demo_graspfix_fast_%s',datestr(now,'yyyymmddTHHMMSS'));
+name = sprintf('demo__mat_graspfix_fast_%s',datestr(now,'yyyymmddTHHMMSS'));
 file_demoLog= strcat(name,'.mat')
 path_demoLog = ('C:/Users/elzaatas/Documents/Matlab-Vrep/GraspLfD/Demonstrations/');
 file_demoVideo = strcat(name,'.avi');
@@ -72,12 +72,12 @@ returnCode= vrep.simxSetIntegerSignal(id, 'demoInProgress', 1,vrep.simx_opmode_o
 while demoInProgress ~=2
     t=t+1
     for i = 1:length(frames)
-        [returnCode, frames(i).pos(t,:)]=vrep.simxGetObjectPosition(id,frames(i).handle,-1,vrep.simx_opmode_streaming);
-        [returnCode, frames(i).orient(t,:)]=vrep.simxGetObjectOrientation(id,frames(i).handle,-1,vrep.simx_opmode_streaming);
+        [returnCode, frames(i).mat(t,:)]=vrep.simxGetObjectMatrix(id,frames(i).handle,-1,vrep.simx_opmode_streaming);
+        %[returnCode, frames(i).orient(t,:)]=vrep.simxGetObjectOrientation(id,frames(i).handle,-1,vrep.simx_opmode_streaming);
     end
     for i=1:length(points)
-        [returnCode, points(i).pos(t,:)]=vrep.simxGetObjectPosition(id,points(i).handle,-1,vrep.simx_opmode_streaming);
-        [returnCode, points(i).orient(t,:)]=vrep.simxGetObjectOrientation(id,points(i).handle,-1,vrep.simx_opmode_streaming);
+        [returnCode, points(i).mat(t,:)]=vrep.simxGetObjectMatrix(id,points(i).handle,-1,vrep.simx_opmode_streaming);
+        %[returnCode, points(i).orient(t,:)]=vrep.simxGetObjectOrientation(id,points(i).handle,-1,vrep.simx_opmode_streaming);
     end
     [returnCode, resolution, image]=vrep.simxGetVisionSensorImage2(id, camera, 0, vrep.simx_opmode_oneshot_wait);
     writeVideo(outputVideo,image);

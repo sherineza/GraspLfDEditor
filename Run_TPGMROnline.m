@@ -17,10 +17,10 @@ nbRepros = 3; %Number of reproductions with new situations randomly generated
 disp('Load 3rd order tensor data...');
 % s(n).Data0 is the n-th demonstration of a trajectory of s(n).nbData datapoints, with s(n).p(m).b and 's(n).p(m).A describing
 % the context in which this demonstration takes place (position and orientation of the m-th candidate coordinate system)
-load('./Demonstrations/DataGMM01.mat'); %REPLACE THIS WITH OWN DATA OF SIMILAR DIMENSIONS
+load('C:/Users/elzaatas/Documents/Matlab-Vrep/GraspLfD/Demonstrations/DataGMM01.mat'); %REPLACE THIS WITH OWN DATA OF SIMILAR DIMENSIONS
 nbData=model.nbperDemo;
 nbSamples=model.nbSamples;
-nbSamples=3;
+nbSamples=2;
 %% Observations from the perspective of each candidate coordinate system
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Data' contains the observations in the different coordinate systems: it is a 3rd order tensor of dimension D x P x N,
@@ -38,7 +38,7 @@ nbSamples=3;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 fprintf('Parameters estimation of TP-GMM with EM:');
 %model = init_tensorGMM_kmeans(Data, model);
-model = init_tensorGMM_timeBased(Data, model);
+ model = init_tensorGMM_timeBased(Data, model);
 model = EM_tensorGMM(Data, model);
 
 %Precomputation of covariance inverses
@@ -64,7 +64,11 @@ if (nargin < 1) %in the case when the id and v-rep may be given as input
 end
 
 %initialise
-frame_names = {'Marker_Blue', 'Marker_Green','Frame0'};
+if model.nbFrames ==2
+    frame_names = {'Marker_Blue', 'Frame0'};
+else
+    frame_names = {'Marker_Blue', 'Marker_Green', 'Frame0'};
+end
 frames = struct([]);
 for i = 1:length(frame_names)
     [res, handle]=vrep.simxGetObjectHandle(id, frame_names{i},vrep.simx_opmode_blocking);
@@ -72,7 +76,7 @@ for i = 1:length(frame_names)
     [returnCode, pos]=vrep.simxGetObjectPosition(id,frames(i).handle,-1,vrep.simx_opmode_streaming);
     [returnCode, orient]=vrep.simxGetObjectOrientation(id,frames(i).handle,-1,vrep.simx_opmode_streaming);
 end
-[res, target]=vrep.simxGetObjectHandle(id, 'BarrettHand',vrep.simx_opmode_blocking);
+[res, target]=vrep.simxGetObjectHandle(id, 'Tip',vrep.simx_opmode_blocking);
 
 %% Reproductions
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -120,9 +124,11 @@ while true
         Rotf_g=[eul2rotm([0,0,orient(1)])*eul2rotm([0,orient(2),0])*eul2rotm([orient(3),0,0])];
         
         if orientfeaturesin ==true
-            pTmp(nbframe).b=[0,pos,orient]';
+            pTmp(nbframe).b=[0,pos,[0 0 0 0 0 0 0 0 0]]';
             pTmp(nbframe).A(2:4,2:4)=Rotf_g;
-            %pTmp(nbframe).A(5:end,5:end)=Rotf_g;
+            pTmp(nbframe).A(5:7,5:7)=Rotf_g;
+            pTmp(nbframe).A(8:10,8:10)=Rotf_g;
+            pTmp(nbframe).A(11:13,11:13)=Rotf_g;
         else
             pTmp(nbframe).b=[0,pos]';
             pTmp(nbframe).A(2:4,2:4)=Rotf_g;
@@ -153,16 +159,24 @@ while true
     end
     
     data=r;
+    relativeto=-1;
+    %%%%%%%%%% 
+    %Actually replicating one of the demos to see if data is recorded
+    %properly data.Data(nboffeatures, nboftime)
+%     data=testdemodata;relativeto=frames(1).handle;
+    %%%%%%%%%%
+
     for i=1:length(data.Data(1,:))
         pos=data.Data(1:3,i);
         if orientfeaturesin ==true
-            orient=data.Data(4:6,i);
-            [returnCode]=vrep.simxSetObjectOrientation(id,target,-1, orient,vrep.simx_opmode_blocking);
+            %orient=data.Data(4:6,i);
+            orient=rotm2eul([data.Data(4:6,i),data.Data(7:9,i),data.Data(10:12,i)],'XYZ')
+            [returnCode]=vrep.simxSetObjectOrientation(id,target,relativeto,orient,vrep.simx_opmode_blocking)
         end
-        [returnCode]=vrep.simxSetObjectPosition(id,target,-1, pos,vrep.simx_opmode_blocking);
+        %disp('moving');
+        [returnCode]=vrep.simxSetObjectPosition(id,target, relativeto, pos,vrep.simx_opmode_blocking);
     end
-    
-    pause(10);
+    pause(10);    
 end
 
 end
