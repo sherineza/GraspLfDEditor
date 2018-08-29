@@ -3,18 +3,16 @@ function Run_demoLog2GMMinput
 % data for the GMM learning function.
 %% Get demo Log file names
 path_demoLog=('C:/Users/elzaatas/Documents/Matlab-Vrep/GraspLfD/Demonstrations/');
-filenames = dir(strcat(path_demoLog,'demo_graspfix_fast_201808*.mat'));
-filenames={filenames(1:7).name};
+filenames = dir(strcat(path_demoLog,'demo_RRgraspfix_fast_201808*.mat'));
+filenames={filenames.name};
 
 %% Load data + manipulate
-orientfeaturesin =true;
+orientfeaturesin =1; %0 for only position; 1 for pos+orient(total 12); 2 for pos+pos..(total 12); 3 for pos+rand(total 4)
 
 Data =[];s=struct();s.p=struct();nbTimeSteps=[];
 for i=1:length(filenames)
     load(strcat(path_demoLog,filenames{i}));
     nbTimeSteps(i)=t;
-    
-    
     
     %For data of moving points:
     %Data should be n x m x g matrix: n is number of dimension of data
@@ -37,25 +35,28 @@ for i=1:length(filenames)
             %Rotp_g=[eul2rotm([orientp(3),0,0])*eul2rotm([0,orientp(2),0])*eul2rotm([0,0,orientp(1)])];
             
             %Homp_g=[[Rotp_g,[points.pos(j,:)]'];[0,0,0,1]];
-   
+            
             % [time, posx,posy,posz,orientalpha, orientbeta, orientgamma]
-            relative_orient=inv(Rotf_g)*Rotp_g;
-            relative_orient=rotm2eul(relative_orient,'XYZ');           
+%             relative_orient=inv(Rotf_g)*Rotp_g;
+%             relative_orient=rotm2eul(relative_orient,'XYZ');
+            relative_pos=Rotf_g*(points.pos(j,:)-frames(nbframe).pos(j,:))';
             relative_orient=[inv(Rotf_g1)*Rotp_g*[1,0,0]';inv(Rotf_g1)*Rotp_g*[0,1,0]';inv(Rotf_g1)*Rotp_g*[0,0,1]'];
-            if orientfeaturesin ==true
-                relative_pos=Rotf_g1*(+points.pos(j,:)-frames(nbframe).pos(j,:))';
+            if orientfeaturesin ==1
                 data_temp(:,nbframe) = [j;relative_pos(1:3);relative_orient(1:9)];
-            else
-                relative_pos=Rotf_g*(points.pos(j,:)-frames(nbframe).pos(j,:))';
+            elseif orientfeaturesin ==0       
                 data_temp(:,nbframe) = [j;relative_pos(1:3)];
+            elseif orientfeaturesin ==2
+                data_temp(:,nbframe) = [j;relative_pos(1:3);relative_pos(1:3);relative_pos(1:3);relative_pos(1:3)];
+            elseif orientfeaturesin ==3
+                data_temp(:,nbframe) = [j;relative_pos(1:3);rand(1,3)];
             end
             
         end
         Data(:,:,j,i)=data_temp;
     end
-% Saving a sample demo
-testdemodata.Data=Data(2:end,1,2:end,i)
-
+    % Saving a sample demo
+    testdemodata.Data=Data(2:end,1,2:end,i)
+    
     %For data of frames:
     %Struct s contains n rows (n is number of demonstrations). Each row
     %contains struct p with m rows (m being number of frames). Each row
@@ -65,16 +66,26 @@ testdemodata.Data=Data(2:end,1,2:end,i)
         orient=frames(nbframe).orient(10,:);
         Rotf_g1=[eul2rotm([0,0,orient(1)])*eul2rotm([0,orient(2),0])*eul2rotm([orient(3),0,0])];
         Rotf_g=[eul2rotm([orient(3),0,0])*eul2rotm([0,orient(2),0])*eul2rotm([0,0,orient(1)])];
-       
-        if orientfeaturesin ==true
+        Rotf_g1=SpinCalc('EA123toDCM',orient.*180/3.1415,0.1,0);
+        
+        if orientfeaturesin ==1
             s(i).p(nbframe).b=[0,frames(nbframe).pos(10,:),[0 0 0 0 0 0 0 0 0]];
             s(i).p(nbframe).A(2:4,2:4)= Rotf_g1;
             s(i).p(nbframe).A(5:7,5:7)=Rotf_g1;
             s(i).p(nbframe).A(8:10,8:10)=Rotf_g1;
             s(i).p(nbframe).A(11:13,11:13)=Rotf_g1;
-        else
+        elseif orientfeaturesin ==0
             s(i).p(nbframe).b=[0,frames(nbframe).pos(10,:)]';
-            s(i).p(nbframe).A(end-2:end,end-2:end)=Rotf_g;
+            s(i).p(nbframe).A(end-2:end,end-2:end)=Rotf_g1;
+        elseif orientfeaturesin ==2
+            s(i).p(nbframe).b=[0,frames(nbframe).pos(10,:),frames(nbframe).pos(10,:),frames(nbframe).pos(10,:),frames(nbframe).pos(10,:)];
+            s(i).p(nbframe).A(2:4,2:4)= Rotf_g1;
+            s(i).p(nbframe).A(5:7,5:7)=Rotf_g1;
+            s(i).p(nbframe).A(8:10,8:10)=Rotf_g1;
+            s(i).p(nbframe).A(11:13,11:13)=Rotf_g1;
+        elseif orientfeaturesin ==3
+            s(i).p(nbframe).b=[0,frames(nbframe).pos(10,:),0]';
+            s(i).p(nbframe).A(end-2:end,end-2:end)=Rotf_g1;            
         end
     end
     

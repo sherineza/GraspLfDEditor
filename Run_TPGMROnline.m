@@ -38,7 +38,7 @@ nbSamples=2;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 fprintf('Parameters estimation of TP-GMM with EM:');
 %model = init_tensorGMM_kmeans(Data, model);
- model = init_tensorGMM_timeBased(Data, model);
+model = init_tensorGMM_timeBased(Data, model);
 model = EM_tensorGMM(Data, model);
 
 %Precomputation of covariance inverses
@@ -66,8 +66,10 @@ end
 %initialise
 if model.nbFrames ==2
     frame_names = {'Marker_Blue', 'Frame0'};
-else
+elseif model.nbFrames==3
     frame_names = {'Marker_Blue', 'Marker_Green', 'Frame0'};
+elseif model.nbFrames==4
+    frame_names = {'Marker_Blue', 'Marker_Green', 'Frame0','Tip#0'};
 end
 frames = struct([]);
 for i = 1:length(frame_names)
@@ -122,18 +124,28 @@ while true
         [returnCode, orient]=vrep.simxGetObjectOrientation(id,frames(nbframe).handle,-1,vrep.simx_opmode_streaming);
         pTmp(nbframe).A=eye(length(Data(:,1,1)));
         Rotf_g=[eul2rotm([0,0,orient(1)])*eul2rotm([0,orient(2),0])*eul2rotm([orient(3),0,0])];
+        Rotf_g=SpinCalc('EA123toDCM',orient.*180/3.1415,0.1,0);
         
-        if orientfeaturesin ==true
+        if orientfeaturesin==1
             pTmp(nbframe).b=[0,pos,[0 0 0 0 0 0 0 0 0]]';
             pTmp(nbframe).A(2:4,2:4)=Rotf_g;
             pTmp(nbframe).A(5:7,5:7)=Rotf_g;
             pTmp(nbframe).A(8:10,8:10)=Rotf_g;
             pTmp(nbframe).A(11:13,11:13)=Rotf_g;
-        else
+        elseif orientfeaturesin == 0
             pTmp(nbframe).b=[0,pos]';
             pTmp(nbframe).A(2:4,2:4)=Rotf_g;
+        elseif orientfeaturesin ==2
+            pTmp(nbframe).b=[0,pos,pos,pos,pos];
+            pTmp(nbframe).A(2:4,2:4)= Rotf_g;
+            pTmp(nbframe).A(5:7,5:7)=Rotf_g;
+            pTmp(nbframe).A(8:10,8:10)=Rotf_g;
+            pTmp(nbframe).A(11:13,11:13)=Rotf_g;
+        elseif orientfeaturesin ==3
+            pTmp(nbframe).b=[0,pos,0]';
+            pTmp(nbframe).A(end-2:end,end-2:end)=Rotf_g;
         end
-
+        
     end
     r.p = pTmp;
     
@@ -145,14 +157,16 @@ while true
         end
     end
     
+    nbFeatures=length(out);
     %Product of Gaussians (fusion of information from the different coordinate systems)
     for t=1:nbData
         SigmaP = zeros(length(out));
         MuP = zeros(length(out), 1);
         for m=1:model.nbFrames
-            
-            SigmaP = SigmaP + inv(SigmaTmp(:,:,t,m));
-            MuP = MuP + SigmaTmp(:,:,t,m) \ MuTmp(:,t,m);
+            for k = 1: nbFeatures
+                SigmaP = SigmaP + inv(SigmaTmp(:,:,t,m));
+                MuP = MuP + SigmaTmp(:,:,t,m) \ MuTmp(:,t,m);
+            end
         end
         r.Sigma(:,:,t) = inv(SigmaP);
         r.Data(:,t) = r.Sigma(:,:,t) * MuP;
@@ -160,23 +174,21 @@ while true
     
     data=r;
     relativeto=-1;
-    %%%%%%%%%% 
+    %%%%%%%%%%
     %Actually replicating one of the demos to see if data is recorded
     %properly data.Data(nboffeatures, nboftime)
-%     data=testdemodata;relativeto=frames(1).handle;
+    %data=testdemodata;relativeto=frames(1).handle;
     %%%%%%%%%%
-
+    
     for i=1:length(data.Data(1,:))
         pos=data.Data(1:3,i);
-        if orientfeaturesin ==true
-            %orient=data.Data(4:6,i);
+        if orientfeaturesin ==1
             orient=rotm2eul([data.Data(4:6,i),data.Data(7:9,i),data.Data(10:12,i)],'XYZ')
             [returnCode]=vrep.simxSetObjectOrientation(id,target,relativeto,orient,vrep.simx_opmode_blocking)
         end
-        %disp('moving');
         [returnCode]=vrep.simxSetObjectPosition(id,target, relativeto, pos,vrep.simx_opmode_blocking);
     end
-    pause(10);    
+    pause(10);
 end
 
 end
